@@ -1,0 +1,4 @@
+ ORG $6000
+ LDY #$10
+ JSR $AE42
+ RTS

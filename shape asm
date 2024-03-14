@@ -1,0 +1,147 @@
+                  ORG $6000
+
+* FIRMWARE SWITCHES
+
+GRAPHICS          EQU $C050             ; GRAPHICS MODE
+FULLSCRN          EQU $C052             ; FULL SCREEN MODE
+PAGE1             EQU $C054             ; SELECT PRIMARY PAGE
+HIRES             EQU $C057             ; USEHI-RES GRAPHICS
+
+* ENTRY POINT
+
+START             JSR CLRHGR1           ; CLEAR PAGE 1 (DO IT NOW SO WE DON'T SEE IT HAPPEN)
+                  BIT GRAPHICS          ; SWITCH TO GRAPHICS MODE
+                  BIT HIRES             ; ENABLE HI-RES
+                  BIT PAGE1             ; DISPLAY PAGE 1
+                  BIT FULLSCRN          ; DISPLAY FULL SCREEN
+                  JSR DRAWSHAPE         ; DRAW
+                  RTS
+
+* DRAW SHAPE
+
+DRAWSHAPE         LDA SCREEN_X          ; GET CURRENT SCREEN POSITION
+                  STA SHAPE_X
+                  LDA SCREEN_Y
+                  STA SHAPE_Y
+                  CLC                   ; ALWAYS NEED TO CLEAR CARRY BEFORE ADC
+                  ADC SHAPE_HEIGHT      ; COMPUTE SHAPE DEPTH = SCREEN POSITION + HEIGHT
+                  STA SHAPE_DEPTH
+                  STZ SHAPE_BYTE_OFFSET ; RESET SHAPE BYTE OFFSET TO ZERO
+:LINE             LDY SHAPE_X           ; GET INITIAL LINE/COLUMN POSITION OF SHAPE BYTE
+                  LDX SHAPE_Y
+                  LDA HI,X              ; GET SCREEN BUFFER ADDRESS
+                  STA HIGH
+                  LDA LO,X
+                  STA LOW
+                  LDA (LOW),Y           ; GET CURRENT BYTE AT THAT POSITION
+                  LDX SHAPE_BYTE_OFFSET ; GET SHAPE BYTE OFFSET
+                  EOR SHAPE,X           ; EXCLUSIVE-OR ACCUMULATOR WITH SHAPE BYTE
+                  STA (LOW),Y           ; PLOT SHAPE BYTE
+                  INC SHAPE_BYTE_OFFSET ; INC FOR EACH BYTE IN A SHAPE LINE
+                  INC SHAPE_Y           ; NEXT LINE
+                  LDA SHAPE_Y
+                  CMP SHAPE_DEPTH       ; ARE ALL SHAPE LINES DRAWN?
+                  BLT :LINE             ; IF NOT, DRAW NEXT LINE
+                  RTS
+
+* CLEAR HI-RES PAGE1
+
+CLRHGR1           LDA #$00              ; LOW BYTE OF PAGE1 ADDRESS
+                  STA LOW               ; STORE IN ZERO-PAGE POINTER
+                  LDA #$20              ; HIGH BYTE OF PAGE1 ADDRESS
+                  STA HIGH              ; STORE IN ZERO-PAGE POINTER
+:CLR1             LDA #$00              ; BLACK PIXELS
+                  LDY #$00              ; START AT $2000
+:CLR              STA (LOW),Y           ; REFERENCE ROW[COL]
+                  INY                   ; NEXT COLUMN
+                  BNE :CLR              ; IF ZERO THAT MEANS WE WENT PAST $FF (END OF ROW)
+										; TO $00 (START OF NEW ROW)
+                  INC HIGH              ; NEXT ROW
+                  LDA HIGH              ; LOAD FOR COMPARISON BELOW
+                  CMP #$40              ; CHECK NEXT ROW WOULD BE PAGE2 $4000
+                  BLT :CLR1             ; IF NOT, CONTINUE
+                  RTS
+                  
+* INITIAL SCREEN POSITION
+
+SCREEN_Y          DFB #$00              ; CURRENT LINE NUMBER
+SCREEN_X          DFB #$00              ; CURRENT COLUMN NUMBER
+
+; SHAPE VARIABLES
+
+SHAPE_BYTE_OFFSET DS  1                 ; INDEX TO SHAPE BYTE
+SHAPE_DEPTH       DS  1                 ; COMPUTED AS SHAPE_Y + SHAPE_HEIGHT
+SHAPE_HEIGHT      DFB #$08              ; HEIGHT OF SHAPE (IN LINES)
+SHAPE_LINE_BYTES  DFB #$00              ; NUMBER OF BYTES ON EACH LINE, ZERO INDEXED
+                                        ; SO A 1 BYTE WIDE SHAPE WOULD BE SHAPE[0]
+
+* KEEP TRACK OF LINE/COLUMN WITHIN SHAPE
+
+SHAPE_Y           DS  1
+SHAPE_X           DS  1
+
+* EACH SHAPE LINE IS ONE BYTE OF 7 BITS
+
+SHAPE             HEX 08                ; 0001000 ...X...
+                  HEX 14                ; 0010100 ..X.X..
+                  HEX 08                ; 0001000 ...X...
+                  HEX 3E                ; 0111110 .XXXXX.
+                  HEX 5D                ; 1011101 X.XXX.X
+                  HEX 1C                ; 0011100 ..XXX..
+                  HEX 14                ; 0010100 ..X.X..
+                  HEX 22                ; 0100010 .X...X.
+
+* ZERO-PAGE ADDRESSES
+
+LOW               EQU $1A               ; HGR LINE FROM LOOKUP TABLE
+HIGH              EQU $1B
+
+
+* HI-RES LINE ADDRESS LOOKUP TABLES
+
+; HIGH-BYTE
+
+HI                HEX 2024282C3034383C
+                  HEX 2024282C3034383C
+                  HEX 2125292D3135393D
+                  HEX 2125292D3135393D
+                  HEX 22262A2E32363A3E
+                  HEX 22262A2E32363A3E
+                  HEX 2327282F33373B3F
+                  HEX 23272B2F33373B3F
+                  HEX 2024282C3034383C
+                  HEX 2024282C3034383C
+                  HEX 2125292D3135393D
+                  HEX 2125292D3135393D
+                  HEX 22262A2E32363A3E
+                  HEX 22262A2E32363A3E
+                  HEX 23272B2F33373B3F
+                  HEX 23272B2F33373B3F
+                  HEX 2024282C3034383C
+                  HEX 2024282C3034383C
+                  HEX 2125292D3135393D
+                  HEX 2125292D3135393D
+                  HEX 22262A2E32363A3E
+                  HEX 22262A2E32363A3E
+                  HEX 23272B2F33373B3F
+                  HEX 23272B2F33373B3F
+
+
+				  
+				  
+				  
+				  
+; LOW-BYTE
+
+LO                LUP 4 ; REPEAT 4 TIMES
+                  HEX 0000000000000000
+                  HEX 8080808080808080
+                  --^
+                  LUP 4 ; REPEAT 4 TIMES
+                  HEX 2828282828282828
+                  HEX A8A8A8A8A8A8A8A8
+                  --^
+                  LUP 4 ; REPEAT 4 TIMES
+                  HEX 5050505050505050
+                  HEX D0D0D0D0D0D0D0D0
+                  --^
